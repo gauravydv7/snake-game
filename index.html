@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="shortcut icon" href="icon.png " type="image/png">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="shortcut icon" href="icon.png" type="image/png">
     <link rel="stylesheet" href="style.css">
     <title>Snake Game</title>
 </head>
 <body>
-     <main>
+    <main>
         <section>
             <div class="infos">
                 <div class="info">
@@ -26,18 +26,39 @@
                         <span id="time">00:00</span>
                     </h3>
                 </div>
-             </div>
-            <div class="board">
-             </div>
+                <button class="btn btn-pause" id="pause-btn" aria-label="Pause">
+                    <svg class="icon-pause" viewBox="0 0 24 24" width="18" height="18"><rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/></svg>
+                    <svg class="icon-play" viewBox="0 0 24 24" width="18" height="18" style="display:none;"><path d="M7 4l13 8-13 8V4z" fill="currentColor"/></svg>
+                </button>
+            </div>
+
+            <div class="board-wrapper">
+                <div class="board"></div>
+            </div>
+
+            <!-- On-screen D-pad: primary mobile control, also usable with mouse -->
+            <div class="dpad" id="dpad" aria-label="Direction controls">
+                <button class="dpad-btn dpad-up" data-dir="up" aria-label="Move Up">▲</button>
+                <button class="dpad-btn dpad-left" data-dir="left" aria-label="Move Left">◀</button>
+                <button class="dpad-btn dpad-right" data-dir="right" aria-label="Move Right">▶</button>
+                <button class="dpad-btn dpad-down" data-dir="down" aria-label="Move Down">▼</button>
+            </div>
         </section>
+
         <div class="modal">
             <div class="start-game">
                 <h2>Welcome to Snake Game</h2>
+                <p class="hint">Arrow keys / swipe / D-pad to move &middot; Space to pause</p>
                 <button class="btn btn-start">Start Game</button>
             </div>
             <div class="game-over">
                 <h2>Game Over</h2>
+                <p class="final-score">Score: <span id="final-score">0</span></p>
                 <button class="btn btn-restart">Restart Game</button>
+            </div>
+            <div class="paused">
+                <h2>Paused</h2>
+                <button class="btn btn-resume">Resume</button>
             </div>
         </div>
     </main>

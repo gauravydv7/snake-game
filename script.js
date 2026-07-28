@@ -2,29 +2,38 @@
 // DOM Elements
 // ===========================
 
+const boardWrapper = document.querySelector(".board-wrapper");
 const board = document.querySelector(".board");
 
 const modal = document.querySelector(".modal");
 const startGameModal = document.querySelector(".start-game");
 const gameOverModal = document.querySelector(".game-over");
+const pausedModal = document.querySelector(".paused");
 
 const startButton = document.querySelector(".btn-start");
 const restartButton = document.querySelector(".btn-restart");
+const resumeButton = document.querySelector(".btn-resume");
+const pauseButton = document.querySelector("#pause-btn");
+const pauseIcon = pauseButton.querySelector(".icon-pause");
+const playIcon = pauseButton.querySelector(".icon-play");
 
 const scoreElement = document.querySelector("#score");
+const finalScoreElement = document.querySelector("#final-score");
 const highScoreElement = document.querySelector("#high-score");
 const timeElement = document.querySelector("#time");
+
+const dpad = document.querySelector("#dpad");
 
 // ===========================
 // Game Settings
 // ===========================
 
-const BLOCK_SIZE = 50;
+const BLOCK_SIZE = 24;   // px, only used to decide how many cells fit
+const MIN_CELLS = 8;     // never render a grid smaller than this
 
-const rows = Math.floor(board.clientHeight / BLOCK_SIZE);
-const cols = Math.floor(board.clientWidth / BLOCK_SIZE);
-
-const blocks = [];
+let rows;
+let cols;
+let blocks = {};
 
 // ===========================
 // Game State
@@ -47,23 +56,40 @@ let gameSpeed = 300;
 let gameInterval = null;
 let timerInterval = null;
 
+let isPaused = false;
+let hasStarted = false;
+
 highScoreElement.innerText = highScore;
 
 // ===========================
-// Create Board
+// Build Board (grid size derived from actual container size,
+// so it always matches the screen it's running on)
 // ===========================
 
-for (let row = 0; row < rows; row++) {
+function buildBoard() {
 
-    for (let col = 0; col < cols; col++) {
+    rows = Math.max(MIN_CELLS, Math.floor(board.clientHeight / BLOCK_SIZE));
+    cols = Math.max(MIN_CELLS, Math.floor(board.clientWidth / BLOCK_SIZE));
 
-        const block = document.createElement("div");
+    board.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    board.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
 
-        block.classList.add("block");
+    board.innerHTML = "";
+    blocks = {};
 
-        board.appendChild(block);
+    for (let row = 0; row < rows; row++) {
 
-        blocks[`${row}-${col}`] = block;
+        for (let col = 0; col < cols; col++) {
+
+            const block = document.createElement("div");
+
+            block.classList.add("block");
+
+            board.appendChild(block);
+
+            blocks[`${row}-${col}`] = block;
+
+        }
 
     }
 
@@ -77,8 +103,8 @@ function resetGame() {
 
     snake = [
         {
-            x: 3,
-            y: 7,
+            x: Math.floor(rows / 2),
+            y: Math.floor(cols / 2),
         },
     ];
 
@@ -110,19 +136,15 @@ function randomFood() {
     do {
 
         newFood = {
-
             x: Math.floor(Math.random() * rows),
             y: Math.floor(Math.random() * cols),
-
         };
 
     } while (
-
         snake.some(segment =>
             segment.x === newFood.x &&
             segment.y === newFood.y
         )
-
     );
 
     return newFood;
@@ -130,37 +152,39 @@ function randomFood() {
 }
 
 // ===========================
-// Draw Snake
+// Draw / Clear Snake
 // ===========================
 
 function drawSnake() {
 
-    snake.forEach(segment => {
+    snake.forEach((segment, index) => {
 
-        blocks[`${segment.x}-${segment.y}`]
-            .classList.add("fill");
+        const block = blocks[`${segment.x}-${segment.y}`];
+
+        if (!block) return;
+
+        block.classList.add(index === 0 ? "head" : "fill");
 
     });
 
 }
-
-// ===========================
-// Clear Snake
-// ===========================
 
 function clearSnake() {
 
     snake.forEach(segment => {
 
-        blocks[`${segment.x}-${segment.y}`]
-            .classList.remove("fill");
+        const block = blocks[`${segment.x}-${segment.y}`];
+
+        if (!block) return;
+
+        block.classList.remove("fill", "head");
 
     });
 
 }
 
 // ===========================
-// Draw Food
+// Draw / Clear Food
 // ===========================
 
 function drawFood() {
@@ -173,19 +197,16 @@ function drawFood() {
 
 }
 
-// ===========================
-// Clear Food
-// ===========================
-
 function clearFood() {
 
-    blocks[`${food.x}-${food.y}`]
-        .classList.remove("food");
+    const block = blocks[`${food.x}-${food.y}`];
+
+    if (block) block.classList.remove("food");
 
 }
 
 // ===========================
-// Update Timer
+// Timer
 // ===========================
 
 function updateTimer() {
@@ -205,7 +226,7 @@ function updateTimer() {
 }
 
 // ===========================
-// Update High Score
+// High Score
 // ===========================
 
 function updateHighScore() {
@@ -231,20 +252,37 @@ function gameOver() {
     clearInterval(gameInterval);
     clearInterval(timerInterval);
 
+    hasStarted = false;
+
+    finalScoreElement.innerText = score;
+
     modal.style.display = "flex";
 
     startGameModal.style.display = "none";
+    pausedModal.style.display = "none";
     gameOverModal.style.display = "flex";
 
 }
 
 // ===========================
-// Initialize
+// Direction Helper
+// (shared by keyboard, swipe and D-pad)
 // ===========================
 
-resetGame();
-drawFood();
-drawSnake();
+function setDirection(newDirection) {
+
+    const opposite = {
+        up: "down",
+        down: "up",
+        left: "right",
+        right: "left",
+    };
+
+    if (opposite[newDirection] !== direction) {
+        nextDirection = newDirection;
+    }
+
+}
 
 // ===========================
 // Get Next Head Position
@@ -282,7 +320,7 @@ function getNextHead() {
 }
 
 // ===========================
-// Wall Collision
+// Collisions
 // ===========================
 
 function hitWall(head) {
@@ -296,10 +334,6 @@ function hitWall(head) {
 
 }
 
-// ===========================
-// Self Collision
-// ===========================
-
 function hitSelf(head) {
 
     return snake.some(segment =>
@@ -310,8 +344,7 @@ function hitSelf(head) {
 }
 
 // ===========================
-// Increase Speed
-// Every 50 score
+// Increase Speed every 50 score
 // ===========================
 
 function increaseSpeed() {
@@ -343,30 +376,14 @@ function moveSnake() {
 
     const head = getNextHead();
 
-    // Wall Collision
-
-    if (hitWall(head)) {
+    if (hitWall(head) || hitSelf(head)) {
 
         gameOver();
         return;
 
     }
 
-    // Self Collision
-
-    if (hitSelf(head)) {
-
-        gameOver();
-        return;
-
-    }
-
-    // Food Eat
-
-    if (
-        head.x === food.x &&
-        head.y === food.y
-    ) {
+    if (head.x === food.x && head.y === food.y) {
 
         snake.unshift(head);
 
@@ -384,14 +401,9 @@ function moveSnake() {
 
         increaseSpeed();
 
-    }
-
-    // Normal Move
-
-    else {
+    } else {
 
         snake.unshift(head);
-
         snake.pop();
 
     }
@@ -399,22 +411,16 @@ function moveSnake() {
 }
 
 // ===========================
-// Render
+// Render / Loop
 // ===========================
 
 function render() {
 
     clearSnake();
-
     moveSnake();
-
     drawSnake();
 
 }
-
-// ===========================
-// Main Game Loop
-// ===========================
 
 function gameLoop() {
 
@@ -423,7 +429,7 @@ function gameLoop() {
 }
 
 // ===========================
-// Start Game
+// Start / Restart
 // ===========================
 
 function startGame() {
@@ -431,20 +437,21 @@ function startGame() {
     clearInterval(gameInterval);
     clearInterval(timerInterval);
 
+    hasStarted = true;
+    isPaused = false;
+
     modal.style.display = "none";
 
     startGameModal.style.display = "flex";
     gameOverModal.style.display = "none";
+    pausedModal.style.display = "none";
+
+    setPauseIcon();
 
     gameInterval = setInterval(gameLoop, gameSpeed);
-
     timerInterval = setInterval(updateTimer, 1000);
 
 }
-
-// ===========================
-// Restart Game
-// ===========================
 
 function restartGame() {
 
@@ -467,9 +474,16 @@ function restartGame() {
 // Pause / Resume
 // ===========================
 
-let isPaused = false;
+function setPauseIcon() {
+
+    pauseIcon.style.display = isPaused ? "none" : "block";
+    playIcon.style.display = isPaused ? "block" : "none";
+
+}
 
 function togglePause() {
+
+    if (!hasStarted) return;
 
     if (isPaused) {
 
@@ -478,6 +492,9 @@ function togglePause() {
 
         isPaused = false;
 
+        modal.style.display = "none";
+        pausedModal.style.display = "none";
+
     } else {
 
         clearInterval(gameInterval);
@@ -485,7 +502,14 @@ function togglePause() {
 
         isPaused = true;
 
+        modal.style.display = "flex";
+        startGameModal.style.display = "none";
+        gameOverModal.style.display = "none";
+        pausedModal.style.display = "flex";
+
     }
+
+    setPauseIcon();
 
 }
 
@@ -498,39 +522,24 @@ document.addEventListener("keydown", (event) => {
     switch (event.key) {
 
         case "ArrowUp":
-
-            if (direction !== "down")
-                nextDirection = "up";
-
+            setDirection("up");
             break;
 
         case "ArrowDown":
-
-            if (direction !== "up")
-                nextDirection = "down";
-
+            setDirection("down");
             break;
 
         case "ArrowLeft":
-
-            if (direction !== "right")
-                nextDirection = "left";
-
+            setDirection("left");
             break;
 
         case "ArrowRight":
-
-            if (direction !== "left")
-                nextDirection = "right";
-
+            setDirection("right");
             break;
 
         case " ":
-
             event.preventDefault();
-
             togglePause();
-
             break;
 
     }
@@ -539,6 +548,8 @@ document.addEventListener("keydown", (event) => {
 
 // ===========================
 // Mobile Swipe Controls
+// (touchmove is prevented + { passive: false } so the browser
+// never hijacks the gesture for page-scroll / pull-to-refresh)
 // ===========================
 
 let touchStartX = 0;
@@ -549,9 +560,17 @@ board.addEventListener("touchstart", (e) => {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
 
-});
+}, { passive: false });
+
+board.addEventListener("touchmove", (e) => {
+
+    e.preventDefault();
+
+}, { passive: false });
 
 board.addEventListener("touchend", (e) => {
+
+    e.preventDefault();
 
     const touchEndX = e.changedTouches[0].clientX;
     const touchEndY = e.changedTouches[0].clientY;
@@ -559,31 +578,38 @@ board.addEventListener("touchend", (e) => {
     const dx = touchEndX - touchStartX;
     const dy = touchEndY - touchStartY;
 
+    const SWIPE_THRESHOLD = 24;
+
     if (Math.abs(dx) > Math.abs(dy)) {
 
-        if (dx > 30 && direction !== "left") {
-
-            nextDirection = "right";
-
-        } else if (dx < -30 && direction !== "right") {
-
-            nextDirection = "left";
-
-        }
+        if (dx > SWIPE_THRESHOLD) setDirection("right");
+        else if (dx < -SWIPE_THRESHOLD) setDirection("left");
 
     } else {
 
-        if (dy > 30 && direction !== "up") {
-
-            nextDirection = "down";
-
-        } else if (dy < -30 && direction !== "down") {
-
-            nextDirection = "up";
-
-        }
+        if (dy > SWIPE_THRESHOLD) setDirection("down");
+        else if (dy < -SWIPE_THRESHOLD) setDirection("up");
 
     }
+
+}, { passive: false });
+
+// ===========================
+// On-screen D-pad (mobile fallback / alternative to swipe)
+// ===========================
+
+dpad.querySelectorAll(".dpad-btn").forEach(btn => {
+
+    const dir = btn.dataset.dir;
+
+    btn.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        setDirection(dir);
+    }, { passive: false });
+
+    btn.addEventListener("click", () => {
+        setDirection(dir);
+    });
 
 });
 
@@ -592,6 +618,8 @@ board.addEventListener("touchend", (e) => {
 // ===========================
 
 startButton.addEventListener("click", () => {
+
+    buildBoard();
 
     resetGame();
 
@@ -606,13 +634,56 @@ startButton.addEventListener("click", () => {
 });
 
 restartButton.addEventListener("click", restartGame);
+resumeButton.addEventListener("click", togglePause);
+pauseButton.addEventListener("click", togglePause);
+
+// ===========================
+// Resize / Orientation Change
+// Rebuilds the grid so it always matches the real screen size
+// instead of freezing at whatever size loaded first.
+// ===========================
+
+let resizeTimeout;
+
+window.addEventListener("resize", () => {
+
+    clearTimeout(resizeTimeout);
+
+    resizeTimeout = setTimeout(() => {
+
+        const wasRunning = hasStarted && !isPaused;
+
+        clearInterval(gameInterval);
+        clearInterval(timerInterval);
+
+        buildBoard();
+        resetGame();
+        drawFood();
+        drawSnake();
+
+        if (wasRunning) {
+            startGame();
+        } else if (!hasStarted) {
+            modal.style.display = "flex";
+            startGameModal.style.display = "flex";
+            gameOverModal.style.display = "none";
+            pausedModal.style.display = "none";
+        }
+
+    }, 200);
+
+});
 
 // ===========================
 // Initial State
 // ===========================
 
+buildBoard();
+resetGame();
+drawFood();
+drawSnake();
+
 modal.style.display = "flex";
-
 startGameModal.style.display = "flex";
-
 gameOverModal.style.display = "none";
+pausedModal.style.display = "none";
